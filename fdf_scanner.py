@@ -9,7 +9,13 @@ import configparser
 UseConfigFile=0
 ConfigFileName=""
 InputDirectory=[]
-OutputFile='scanner_output.sh'
+OutputFile='fdf_scanner_output'
+
+#   Use a global time variable for output
+#   Only update the screen if we've had more than 1 sec - otherwise we spend
+#   lots of processing time updating the screen with every number.
+GlobalTimer = time.time()
+
 
 PreserveDir=[]
 DatabaseFile=''
@@ -20,6 +26,32 @@ FileDB = []
 MD5KeptCount=0
 MD5CalculatedCount=0
 DuplicatesCount=0
+
+IsWindows=0
+OutputFileRemark="# "
+OutputFileRemove="rm "
+OutputFileExtension=".sh"
+
+
+def ProgressBar( OutputText, TotalCount=0, CurrentCount=0, BarSize=40, TotalLineLength=80):
+    global GlobalTimer
+
+    if (time.time() - GlobalTimer) > 1:
+        #   its been more than 1 sec since last output, so update the screen
+
+        if TotalCount>0:
+            #   We've got values - do a progressbar
+            formatted_name = '\r '+ ( "=" * int(BarSize*(CurrentCount/TotalCount)))+( " " * (BarSize-int(40*(CurrentCount/TotalCount))))+' '+OutputText
+            sys.stdout.write(formatted_name[0:TotalLineLength])
+            sys.stdout.flush()
+            GlobalTimer = time.time()
+
+        else:
+            #   No values - simply output the text
+            formatted_name = '\r ' + OutputText
+            sys.stdout.write(formatted_name[0:TotalLineLength])
+            sys.stdout.flush()
+            GlobalTimer = time.time()
 
 
 #   Given a specific directory, scan and load the data into the FileDB list
@@ -41,9 +73,10 @@ def ScanDirectory(walk_dir):
                 FileCount = FileCount + 1
 
                 if FileCount % 1000:
-                    formatted_name = '\r - FileCount ' + str(FileCount)
-                    sys.stdout.write(formatted_name[0:80])
-                    sys.stdout.flush()
+                    ProgressBar('FileCount ' + str(FileCount))
+                    # formatted_name = '\r - FileCount ' + str(FileCount)
+                    # sys.stdout.write(formatted_name[0:80])
+                    # sys.stdout.flush()
 
                 #   Grab the modification time
                 (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(file_path)
@@ -56,7 +89,11 @@ def ScanDirectory(walk_dir):
                 #   5) Perform delete
 
                 #   And save the data into the array...
-                FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
+                #   If we're doing windows, switch everything to upper case, as windows isn't case sensitive
+                if IsWindows==1:
+                    FileDB.append([filename.upper(), file_path.upper(), time.ctime(mtime), size, '', 'N'])
+                else:
+                    FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
 
 
 
@@ -103,32 +140,54 @@ def GetHistoricMD5(FullFileName,FileDate,FileSize):
 
     return FoundMD5
 
+def OutputHelp():
+    print('fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p <preservedir>] [-c <configfile>] [-w] [-o <outputfile>]')
+    print('')
+    print('Where')
+    print('  -i <InputDir>  (Mandatory) directory to scan for duplicates')
+    print('  -p <PreserveDir> directory to NOT delete from')
+    print('  -c <ConfigFile>  file holding run parameters')
+    print('  -w               output file in WINDOWS Command prompt syntax (batch file)')
+    print('  -o <OutputFile>  put comments/deletions in specific file - default fdf_scanner_output.sh (or .bat)')
+
 
 #   Parse input options
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:],"hi:o:p:d:c:",["ifile=","ofile=","preservedir="])
+    opts, args = getopt.getopt(sys.argv[1:],"hi:o:p:d:c:w",["ifile=","ofile=","preservedir="])
 except getopt.GetoptError:
-    print('scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>]')
+    OutputHelp()
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>]')
+        OutputHelp()
         sys.exit()
+    if opt in ("-w", "--windows"):
+        OutputFileRemark = "REM "
+        OutputFileRemove = "DEL "
+        OutputFileExtension = ".BAT"
+        IsWindows=1
     elif opt in ("-c", "--configfile"):
         #   Ok, we're using a config file rather than parameters from the command line
         UseConfigFile=1
         ConfigFileName=arg
     elif opt in ("-i", "--ifile"):
-        InputDirectory.append(arg)
+        if IsWindows == 1:
+            #   Windows - switch to upper case as we're not case sensitive
+            InputDirectory.append(arg.upper())
+        else:
+            InputDirectory.append(arg)
     elif opt in ("-o", "--ofile"):
         OutputFile = arg
     elif opt in ("-p", "--preservedir"):
-        PreserveDir.append(arg)
+        if IsWindows == 1:
+            #   Windows - switch to upper case as we're not case sensitive
+            PreserveDir.append(arg.upper())
+        else:
+            PreserveDir.append(arg)
     elif opt in ("-d", "--databasefile"):
         DatabaseFile = arg
-
 
 if UseConfigFile==1:
     #   Ok, we're using a config file to pick up parameters:
@@ -138,25 +197,50 @@ if UseConfigFile==1:
     config.read(ConfigFileName)
 
     #   Loop through the input director(ies) and add then to the InputDirectory list.
-    for x in config['InputDirectories']:
-        InputDirectory.append(config['InputDirectories'][x])
+    try:
+        for x in config['InputDirectories']:
+            InputDirectory.append(config['InputDirectories'][x])
+    except:
+        pass
 
     #   Loop through the input director(ies) and add then to the InputDirectory list.
-    for x in config['PreserveDirectories']:
-        PreserveDir.append(config['PreserveDirectories'][x])
+    try:
+        for x in config['PreserveDirectories']:
+            PreserveDir.append(config['PreserveDirectories'][x])
+    except:
+        pass
 
     #   Loop through the input director(ies) and add then to the InputDirectory list.
-    for x in config['OutputFile']:
-        OutputFile= (config['OutputFile'][x])
+    try:
+        for x in config['OutputFile']:
+            OutputFile= (config['OutputFile'][x])
+    except:
+        pass
 
     #   Loop through the input director(ies) and add then to the InputDirectory list.
-    for x in config['DatabaseFile']:
-        DatabaseFile=config['DatabaseFile'][x]
+    try:
+        for x in config['DatabaseFile']:
+            DatabaseFile=config['DatabaseFile'][x]
+    except:
+        pass
+
+    #   Loop through the input director(ies) and add then to the InputDirectory list.
+    try:
+        for x in config['WindowsOutput']:
+            OutputFileRemark = "REM "
+            OutputFileRemove = "DEL "
+            OutputFileExtension = ".BAT"
+    except:
+        pass
+
+#   Now that we have the file name, put the correct extension onto it.
+OutputFile=OutputFile+OutputFileExtension
 
 
 if len(InputDirectory)==0:
-    print('Error: at least ONE input directory is required (use -h for help)')
-    exit(-1)
+    print('Error: at least ONE input directory is required')
+    OutputHelp()
+    sys.exit(-1)
 
 for Inputs in InputDirectory:
     print('Input directory:'+Inputs)
@@ -209,18 +293,15 @@ FileDB.sort(key=lambda x: x[3])
 for i in range(1,len(FileDB)-1):
 
     if i % 1000:
-        formatted_name = '\r - Matching files ' + str(i)
-        sys.stdout.write(formatted_name[0:80])
-        sys.stdout.flush()
+        ProgressBar('Matching files ' + str(i),TotalCount=(len(FileDB)-1),CurrentCount=i),
+        # formatted_name = '\r - Matching files ' + str(i)
+        # sys.stdout.write(formatted_name[0:80])
+        # sys.stdout.flush()
 
     # print(FileDB[i][1] + "(" + str(FileDB[i][3]) + ")=" + FileDB[i + 1][1] + "(" + str(FileDB[i + 1][3]) + ")")
  
     if FileDB[i][3] == FileDB[i+1][3] or FileDB[i][3] == FileDB[i-1][3]:
         try:
-            #formatted_name = '\r - get MD5: ' + FileDB[i][1] + (' ' * 90)
-
-            #sys.stdout.write(formatted_name[0:100])
-            #sys.stdout.flush()
 
             MD5Val=""
 
@@ -316,13 +397,10 @@ for i in range(1, len(FileDB) - 1):
         if Last_MD5 != FileDB[i][4] and len(FileDB[i][4]) > 0:
             OutFile.write('\n')
 
-        OutFile.write('\n#    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
-        OutFile.write('\nrm "' + FileDB[i][1]+'"')
+        OutFile.write('\n'+OutputFileRemark+'    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
+        OutFile.write('\n'+OutputFileRemove+' "' + FileDB[i][1]+'"')
 
         DuplicatesCount+=1
-
-        # print('#    ' + FileDB[i][4] + ' MD5:' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
-        # print('rm "' + FileDB[i][1]+'"')
 
         Last_MD5 = FileDB[i][4]
 
@@ -330,10 +408,8 @@ for i in range(1, len(FileDB) - 1):
         if Last_MD5 != FileDB[i][4] and len(FileDB[i][4]) > 0:
             OutFile.write('\n')
 
-        OutFile.write('\n#    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
-        OutFile.write('\n# PRESERVE "' + FileDB[i][1] + '"')
-        # print('#    ' + FileDB[i][4] + ' MD5:' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
-        # print('# preserved dir ' + FileDB[i][1])
+        OutFile.write('\n'+OutputFileRemark+'    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
+        OutFile.write('\n'+OutputFileRemark+' PRESERVE "' + FileDB[i][1] + '"')
 
         Last_MD5 = FileDB[i][4]
 
@@ -341,10 +417,8 @@ for i in range(1, len(FileDB) - 1):
         if Last_MD5 != FileDB[i][4] and len(FileDB[i][4]) > 0:
             OutFile.write('\n')
 
-        OutFile.write('\n#    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' SAVE Size:' + str(FileDB[i][3]))
-        OutFile.write('\n# KEEP "' + FileDB[i][1]+ '"')
-        # print('#    ' + FileDB[i][4] + ' MD5:' + FileDB[i][1] + ' Size:' + str(FileDB[i][3]))
-        # print('# Keep file ' + FileDB[i][1])
+        OutFile.write('\n'+OutputFileRemark+'    (' + FileDB[i][4] + ') ' + FileDB[i][1] + ' SAVE Size:' + str(FileDB[i][3]))
+        OutFile.write('\n'+OutputFileRemark+' KEEP "' + FileDB[i][1]+ '"')
 
         Last_MD5 = FileDB[i][4]
 
@@ -359,7 +433,8 @@ if len(DatabaseFile)>0:
 
     for i in range(1, len(FileDB) - 1):
 
-        if FileDB[i][3] > 250:
+        #   Only back up if we've got file > 250 bytes, and we've got a hash to save
+        if FileDB[i][3] > 250 and len(FileDB[i][4])>0:
 
             #   0) Filename
             #   1) File path + file name
@@ -378,18 +453,8 @@ if len(DatabaseFile)>0:
             etree.SubElement(doc, "MD5").text = FileDB[i][4]
 
 
-            #ET.SubElement(doc, "filename").text = FileDB[i][0]
-            #ET.SubElement(doc, "fullfilename").text = FileDB[i][1]
-            #ET.SubElement(doc, "modtime").text = FileDB[i][2]
-            #ET.SubElement(doc, "size").text = str(FileDB[i][3])
-            #ET.SubElement(doc, "MD5").text = FileDB[i][4]
-
     tree = etree.ElementTree(root)
     tree.write(DatabaseFile,pretty_print=True)
-
-    #OutFile = open(DatabaseFile, 'w')
-    #OutFile.write(str(etree.tostring(root, pretty_print=True)))
-    #OutFile.close()
 
 
 print("Finished")
