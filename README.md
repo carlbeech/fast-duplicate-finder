@@ -5,10 +5,12 @@ HISTORY
 =======
 
 V0.1 - Initial release
+
 V0.2 - Added '-w' option to output suitable for windows command prompt
        Also, added ZIP version, contains a self-contained version with windows EXE (built using pyinstaller)
        The database file now only contains entries that have a SHA256 value, rather than all files > 250 bytes
        this cuts the database file size quite a bit.
+       
 
 A bit of history...
 ===================
@@ -82,9 +84,13 @@ What I mean by this is that with the best of intentions, its not possible to cre
 To help you check, the program outputs comments in the file so you can see if its correct - or alternatively ammend so that you switch which file is deleted and which is preserved.
 
 for example - the output file will look something like:
+
 #(7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/lib/source-map/array-set.js SAVE Size:2718
+
 #KEEP "/home/carl/Downloads/lib/source-map/array-set.js"
+
 #(7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/source-map/lib/source-map/array-set.js Size:2718
+
 rm "/home/carl/Downloads/source-map/lib/source-map/array-set.js"
 
 So, for each set of duplicates found, you see the SHA256 check (showing the files are the same), the location of the file and its name, and also its size.
