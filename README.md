@@ -1,6 +1,15 @@
 # fast-duplicate-finder
 A python program to locate duplicate files - and do it fast
 
+HISTORY
+=======
+
+V0.1 - Initial release
+V0.2 - Added '-w' option to output suitable for windows command prompt
+       Also, added ZIP version, contains a self-contained version with windows EXE (built using pyinstaller)
+       The database file now only contains entries that have a SHA256 value, rather than all files > 250 bytes
+       this cuts the database file size quite a bit.
+
 A bit of history...
 ===================
 If you're anything like me, you'll have hundreds of photos, spread over different directories, but you don't know if you've got a file repeated a number of times (e.g. you've copied the contents of an SD card to your hard drive for 'safe keeping').
@@ -26,6 +35,7 @@ Features of the commandline version:
 * You can save all the input parameters into a configuration file, so you don't have to keep typing them in ;-)
 * Pattern matching of files is performed by using SHA256, not MD5.
 * The program outputs a runnable script that contains the necessary file delete commands, so you can review/ammend before you run.
+* Can output linux (bash) output, or windows (batch file) output
 
 Key Concepts
 ============
@@ -72,9 +82,9 @@ What I mean by this is that with the best of intentions, its not possible to cre
 To help you check, the program outputs comments in the file so you can see if its correct - or alternatively ammend so that you switch which file is deleted and which is preserved.
 
 for example - the output file will look something like:
-#    (7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/lib/source-map/array-set.js SAVE Size:2718
-# KEEP "/home/carl/Downloads/lib/source-map/array-set.js"
-#    (7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/source-map/lib/source-map/array-set.js Size:2718
+#(7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/lib/source-map/array-set.js SAVE Size:2718
+#KEEP "/home/carl/Downloads/lib/source-map/array-set.js"
+#(7f8d294589939739ff779b1ac971a07006c54443dce941d7a1dff026839272b3) /home/carl/Downloads/source-map/lib/source-map/array-set.js Size:2718
 rm "/home/carl/Downloads/source-map/lib/source-map/array-set.js"
 
 So, for each set of duplicates found, you see the SHA256 check (showing the files are the same), the location of the file and its name, and also its size.
@@ -84,6 +94,13 @@ rm "...    this is the other (duplicate) file(s), which the program has elected 
 Note: If you used the 'preserve' option, you would see  # PRESERVE "....   against the file, rather than # KEEP "...
 
 As the output is a text file of commands, you should have no difficulty in altering it if you decide to switch around which to keep and which to delete.
+
+Windows Output
+--------------
+Using '-w' switches to windows output mode - this:
+* adds the extension '.BAT' to the output file instead of '.SH' 
+* Uses appropriate commands within the file (REM and DEL instead of # and rm)
+* Switches off case sensitivity for file names.
 
 
 OK, you say its fast - how's that done? What trick has been employed?
@@ -124,6 +141,10 @@ DatabaseFileName=/home/carl/Dropbox/CARL/Development/scandb.xml
 PreserveDirectory=/home/carl/Dropbox/Development
 PreserveDirectory2=/home/carl/Dropbox/ADirectoryToPreserve
 
+(Note: if you put these in, then output format will be switched to windows style!)
+[WindowsOutput]
+WindowsOutput=1
+
 These INI entries correspond to the input parameters of the program.
 
 NOTE: If you use the -c option, you can still use the other -i and -p options - the extra ones on the command line are just added to the ones defined in the configuration file...
@@ -132,7 +153,7 @@ NOTE: If you use the -c option, you can still use the other -i and -p options - 
 USE
 ===
 
-fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>]
+fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>] [-w]
 
 
 Happy De-duplicating!
