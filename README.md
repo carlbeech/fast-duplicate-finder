@@ -6,11 +6,17 @@ HISTORY
 
 V0.1 - Initial release
 
-V0.2 - Added '-w' option to output suitable for windows command prompt
+V0.1a - Added '-w' option to output suitable for windows command prompt
        Also, added ZIP version, contains a self-contained version with windows EXE (built using pyinstaller)
        The database file now only contains entries that have a SHA256 value, rather than all files > 250 bytes
        this cuts the database file size quite a bit.
-       
+     
+V0.2 - Major update:
+       Core logic now faster
+       Automatically detects if linux or windows
+       running 'fdf_scanner.py' is the command line version
+       running 'fdf_scanner_gui.py' is the GUI version, using QT5.
+       Windows versions are 'fdf_scanner.exe' (command line) and 'fdf_scanner_gui.exe' (GUI version)
 
 A bit of history...
 ===================
@@ -38,6 +44,8 @@ Features of the commandline version:
 * Pattern matching of files is performed by using SHA256, not MD5.
 * The program outputs a runnable script that contains the necessary file delete commands, so you can review/ammend before you run.
 * Can output linux (bash) output, or windows (batch file) output
+* Automatically detects and adapts output for the OS
+* Both GUI and command line versions of the program.
 
 Key Concepts
 ============
@@ -107,6 +115,7 @@ Using '-w' switches to windows output mode - this:
 * adds the extension '.BAT' to the output file instead of '.SH' 
 * Uses appropriate commands within the file (REM and DEL instead of # and rm)
 * Switches off case sensitivity for file names.
+* -w is not mandatory - the program automatically detects linux or windows...
 
 
 OK, you say its fast - how's that done? What trick has been employed?
