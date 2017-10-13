@@ -25,7 +25,18 @@ from fdf_main import Ui_MainWindow
 from ProgressBar import ProgressDlg
 
 
-VersionNumber="0.2"
+VersionNumber="0.4"
+
+
+#   HISTORY
+#
+#   0.1     Initial release - command line only
+#   0.2     GUI release
+#   0.3     Bugfixes:
+#           Crash in BinaryChopSearch routine - cured.
+#   0.4     Load and Save configurations to INI files
+
+
 
 
 #   ProcessBar dialog global communication variables...
@@ -99,18 +110,22 @@ def BinaryChopSearch( SearchString ):
 
     # Ok, look at the next 60...
 
-    Ctr=0
 
-    while (not(OLDFileDB[LowPtr+Ctr][1] == SearchString) and Ctr<60 and (LowPtr+Ctr)<len(FileDB)):
-        MidVal = OLDFileDB[LowPtr + Ctr][1]
-        Ctr+=1
+    try:
 
-    if OLDFileDB[LowPtr + Ctr][1] == SearchString:
-        return (LowPtr+Ctr)
-    else:
+        Ctr=0
+
+        while (not(OLDFileDB[LowPtr+Ctr][1] == SearchString) and Ctr<60 and (LowPtr+Ctr)<len(FileDB)):
+            MidVal = OLDFileDB[LowPtr + Ctr][1]
+            Ctr+=1
+
+        if OLDFileDB[LowPtr + Ctr][1] == SearchString:
+            return (LowPtr+Ctr)
+        else:
+            return -1
+
+    except:
         return -1
-
-
 
 
 def ProgressBar( OutputText, TotalCount=0, CurrentCount=0, BarSize=40, TotalLineLength=80):
@@ -142,6 +157,7 @@ def ScanDirectory(walk_dir):
 
     global ProgressBar_PROGRESS_1
     global ProgressBar_FILETOTAL
+    global IsWindows
 
     FileCount = 0
 
@@ -176,7 +192,8 @@ def ScanDirectory(walk_dir):
                 #   And save the data into the array...
                 #   If we're doing windows, switch everything to upper case, as windows isn't case sensitive
                 if IsWindows==1:
-                    FileDB.append([filename.upper(), file_path.upper(), time.ctime(mtime), size, '', 'N'])
+                    Filepath=file_path.upper()
+                    FileDB.append([filename.upper(), Filepath.replace('/','\\'), time.ctime(mtime), size, '', 'N'])
                 else:
                     FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
 
@@ -184,14 +201,20 @@ def ScanDirectory(walk_dir):
 
 #   Given a full filepath and filename - is this a file thats in the 'preserve' list?
 def CheckPreserve(Fname):
+    global IsWindows
 
     DoPreserve=0
 
     #   Loop through all the preserve data
     for PreservePath in PreserveDir:
 
+        PPath=PreservePath
+
+        if IsWindows==1:
+            PPath=PPath.upper()
+
         #   If the filename like PreserveDir, mark the file as 'preserved'
-        if Fname[:len(PreservePath)] == PreservePath:
+        if Fname[:len(PPath)] == PPath:
             DoPreserve=1
 
     #   1=Yes, 0 =No
@@ -678,17 +701,41 @@ def GetFile(self):
     fileName = QFileDialog.getSaveFileName(self, 'Open file', '.', 'OpenFile(*)')
     if fileName:
         # self.Databasefile.setText(fileName[0])
-        return fileName[0]
+        #   If Windows, change the separator
+        FName = fileName[0]
+        if os.sep == '\\':
+            FName = FName.replace('/', '\\')
+        return FName
+    else:
+        return ""
+
+#   Dialog boxes for getting files and directories
+def OpenFile(self):
+    options = QFileDialog.Options()
+    options |= QFileDialog.DontUseNativeDialog
+    fileName = QFileDialog.getOpenFileName(self, 'Open file', '.', 'OpenFile(*)')
+    if fileName:
+        # self.Databasefile.setText(fileName[0])
+        #   If Windows, change the separator
+        FName = fileName[0]
+        if os.sep == '\\':
+            FName = FName.replace('/', '\\')
+        return FName
     else:
         return ""
 
 
+
 def GetDir(self):
     options = QFileDialog.Options()
-    options |= QFileDialog.DontUseNativeDialog
+    # options |= QFileDialog.DontUseNativeDialog
     fileName = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
     if fileName:
         # self.Databasefile.setText(fileName[0])
+
+        #   If Windows, change the separator
+        if os.sep=='\\':
+            fileName=fileName.replace('/', '\\')
         return fileName
     else:
         return ""
@@ -718,11 +765,103 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #   Connect execute button
         self.StartProcessing.clicked.connect(self.PerformDeDup)
 
+        #   Menu: Load configuration
+        self.actionLoad_Configuration.triggered.connect(self.LoadConfig)
+
+        #   Menu: Save configuration
+        self.actionSave_Configuration.triggered.connect(self.SaveConfig)
+
         #   Holder for about dialog window
         self.Ui_AboutDialog=None
 
         #   Holder for progressbar dialog window
         self.pb=None
+
+
+    def LoadConfig(self):
+
+        #   Clear out on-screen configuration and load a configuration from file.
+
+        #   Start with clearing on-screen data...
+
+        self.SearchDirectoryList.clear()
+        self.PreserveDirectoryList.clear()
+        self.Databasefile.setText("")
+        self.Configurationfile.setText("")
+        self.Outputscript.setText("")
+
+        #   Now, load a configuration file...
+
+        #   File dialog to get file name
+        lfile = ""
+        lfile = OpenFile(self)
+
+        config = configparser.ConfigParser()
+        config.read(lfile)
+
+        #   Loop through the input director(ies) and add then to the Search list.
+        try:
+            for x in config['InputDirectories']:
+                self.SearchDirectoryList.addItem(config['InputDirectories'][x])
+        except:
+            pass
+
+        # Loop through the input director(ies) and add then to the Preserve list.
+        try:
+            for x in config['PreserveDirectories']:
+                self.PreserveDirectoryList.addItem(config['PreserveDirectories'][x])
+        except:
+            pass
+
+        # Loop through the input director(ies) and add then to the InputDirectory list.
+        try:
+            for x in config['OutputFile']:
+                self.Outputscript.setText(config['OutputFile'][x])
+        except:
+            pass
+
+        # Loop through the input director(ies) and add then to the InputDirectory list.
+        try:
+            for x in config['DatabaseFile']:
+                self.Databasefile.setText(config['DatabaseFile'][x])
+        except:
+            pass
+
+    def SaveConfig(self):
+
+        #   Ask for a configuration file name and save on-screen data as a configuration file.
+        sfile = ""
+        sfile = GetFile(self)
+
+        if sfile:
+
+            OutFile = open(sfile, 'w')
+
+            if self.SearchDirectoryList.count()>0:
+                OutFile.write('\n[InputDirectories]\n')
+
+                i=0
+                while i <= self.SearchDirectoryList.count()-1:
+                    OutFile.write('InputDirectory'+str(i)+'='+self.SearchDirectoryList.item(i).text()+'\n')
+                    i+=1
+
+            if self.PreserveDirectoryList.count() > 0:
+                OutFile.write('\n[PreserveDirectories]\n')
+
+                i=0
+                while i <= self.PreserveDirectoryList.count()-1:
+                    OutFile.write('PreserveDirectory' + str(i) + '=' + self.PreserveDirectoryList.item(i).text() + '\n')
+                    i+=1
+
+            if len(self.Outputscript.text())>0:
+                OutFile.write('\n[OutputFile]\n')
+                OutFile.write('\nOutputFileName='+self.Outputscript.text()+'\n')
+
+            if len(self.Databasefile.text())>0:
+                OutFile.write('\n[DatabaseFile]\n')
+                OutFile.write('\nDatabaseFileName='+self.Databasefile.text()+'\n')
+
+            OutFile.close()
 
     def AboutBox(self):
 
