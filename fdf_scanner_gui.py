@@ -99,17 +99,19 @@ def BinaryChopSearch( SearchString ):
 
     # Ok, look at the next 60...
 
-    Ctr=0
+    try:
+        Ctr=0
 
-    while (not(OLDFileDB[LowPtr+Ctr][1] == SearchString) and Ctr<60 and (LowPtr+Ctr)<len(FileDB)):
-        MidVal = OLDFileDB[LowPtr + Ctr][1]
-        Ctr+=1
+        while (not(OLDFileDB[LowPtr+Ctr][1] == SearchString) and Ctr<60 and (LowPtr+Ctr)<len(FileDB)):
+            MidVal = OLDFileDB[LowPtr + Ctr][1]
+            Ctr+=1
 
-    if OLDFileDB[LowPtr + Ctr][1] == SearchString:
-        return (LowPtr+Ctr)
-    else:
+        if OLDFileDB[LowPtr + Ctr][1] == SearchString:
+            return (LowPtr+Ctr)
+        else:
+            return -1
+    except:
         return -1
-
 
 
 
