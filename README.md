@@ -17,6 +17,10 @@ V0.2 - Major update:
        running 'fdf_scanner.py' is the command line version
        running 'fdf_scanner_gui.py' is the GUI version, using QT5.
        Windows versions are 'fdf_scanner.exe' (command line) and 'fdf_scanner_gui.exe' (GUI version)
+       
+V0.3 - Bugfix update:
+       Directory separators reflect the OS
+       Addition of exception handler catches crash within BinaryChopSearch function.
 
 A bit of history...
 ===================
