@@ -22,6 +22,10 @@ V0.3 - Bugfix update:
        Directory separators reflect the OS
        Addition of exception handler catches crash within BinaryChopSearch function.
 
+V0.4 - GUI: load and save config files
+       You can now save the current configuration in the GUI to a .ini config file
+       You can now load the config from an .ini file to the GUI
+
 A bit of history...
 ===================
 If you're anything like me, you'll have hundreds of photos, spread over different directories, but you don't know if you've got a file repeated a number of times (e.g. you've copied the contents of an SD card to your hard drive for 'safe keeping').
