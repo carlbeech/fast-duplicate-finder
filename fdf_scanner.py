@@ -193,7 +193,12 @@ def ScanDirectory(walk_dir):
                 #   If we're doing windows, switch everything to upper case, as windows isn't case sensitive
                 if IsWindows==1:
                     Filepath=file_path.upper()
-                    FileDB.append([filename.upper(), Filepath.replace('/','\\'), time.ctime(mtime), size, '', 'N'])
+                    try:
+                        timestamp = time.ctime(mtime)
+                    except:
+                        print("Timestamp is invalid for file {}".format(Filepath))
+                        timestamp = 0
+                    FileDB.append([filename.upper(), Filepath.replace('/','\\'), timestamp, size, '', 'N'])
                 else:
                     FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
 
