@@ -35,6 +35,11 @@ HISTORY
 - You can now save the current configuration in the GUI to a `.ini` config file
 - You can now load the config from an `.ini` file to the GUI
 
+### V0.5
+
+- Bugfix (Many thanks for the fix from Oliver Kopp)
+- Add exception code to deal with invalid timestamps for files under windows
+
 A bit of history...
 ===================
 
