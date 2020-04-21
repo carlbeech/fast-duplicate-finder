@@ -25,7 +25,7 @@ from fdf_main import Ui_MainWindow
 from ProgressBar import ProgressDlg
 
 
-VersionNumber="0.4"
+VersionNumber="0.6"
 
 
 #   HISTORY
@@ -35,7 +35,10 @@ VersionNumber="0.4"
 #   0.3     Bugfixes:
 #           Crash in BinaryChopSearch routine - cured.
 #   0.4     Load and Save configurations to INI files
-
+#   0.5     Add exception code to deal with invalid timestamps for files under windows
+#   0.6     Added low-memory hash calculate option
+#           Added force to GUI option rather than having to rename the python program.
+#           As files are scanned, the output file is generated (including database file)
 
 
 
@@ -48,8 +51,8 @@ ProgressBar_TEXT=''
 ProgressBar_PROGRESS_1=0
 ProgressBar_Finished_Processing=0
 
-
-
+UseLowMemory=0          # 0.6
+ForceUseGUI=0           # 0.6
 UseConfigFile=0
 ConfigFileName=""
 InputDirectory=[]
@@ -128,25 +131,25 @@ def BinaryChopSearch( SearchString ):
         return -1
 
 
-def ProgressBar( OutputText, TotalCount=0, CurrentCount=0, BarSize=40, TotalLineLength=80):
+def ProgressBar( OutputText, TotalCount=0, CurrentCount=0, BarSize=40, TotalLineLength=80,ForceOutput=0):
     global GlobalTimer
     global ProgressBar_PROGRESS_1
 
     ProgressBar_PROGRESS_1=CurrentCount
 
-    if (time.time() - GlobalTimer) > 1:
+    if (time.time() - GlobalTimer) > 1 or ForceOutput==1 :
         #   its been more than 1 sec since last output, so update the screen
 
         if TotalCount>0:
             #   We've got values - do a progressbar
-            formatted_name = '\r '+ ( "=" * int(BarSize*(CurrentCount/TotalCount)))+( " " * (BarSize-int(40*(CurrentCount/TotalCount))))+' '+OutputText
+            formatted_name = '\r '+ ( "=" * int(BarSize*(CurrentCount/TotalCount)))+( " " * (BarSize-int(40*(CurrentCount/TotalCount))))+' '+OutputText+(" " * 80)
             sys.stdout.write(formatted_name[0:TotalLineLength])
             sys.stdout.flush()
             GlobalTimer = time.time()
 
         else:
             #   No values - simply output the text
-            formatted_name = '\r ' + OutputText
+            formatted_name = '\r ' + OutputText+(" " * 80)
             sys.stdout.write(formatted_name[0:TotalLineLength])
             sys.stdout.flush()
             GlobalTimer = time.time()
@@ -158,8 +161,11 @@ def ScanDirectory(walk_dir):
     global ProgressBar_PROGRESS_1
     global ProgressBar_FILETOTAL
     global IsWindows
+    global DuplicatesCount
+    global DatabaseFile
 
     FileCount = 0
+    FileDelta = 0
 
     #   Go through all the files, but dont follow links
     for root, subdirs, files in os.walk(walk_dir, followlinks=False):
@@ -202,7 +208,32 @@ def ScanDirectory(walk_dir):
                 else:
                     FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
 
+                FileDelta = FileDelta +1
 
+                if FileDelta > 20 :
+                    FileDelta = 0
+
+                    # We've added 50 files - do a quick process and save.
+
+                    #    Calculate hash values for all files.
+                    # ProgressBar_TEXT = ProgressBar_TEXT+chr(13) + chr(10) +"    Examining files..."
+                    #QApplication.processEvents()
+                    CalculateHashes()
+
+                    #    Locate duplicate files
+                    # ProgressBar_TEXT = ProgressBar_TEXT+chr(13) + chr(10) +"    Locating duplicates..."
+                    # QApplication.processEvents()
+                    LocateDups()
+
+                    #    Generate the output
+                    # ProgressBar_TEXT = ProgressBar_TEXT+chr(13) + chr(10) +"    Generating output file..."
+                    # QApplication.processEvents()
+                    DuplicatesCount=0
+                    GenerateOutput()
+
+                    #    If we've got a database file name, save it
+                    if len(DatabaseFile)>0:
+                        SaveDatabase()
 
 #   Given a full filepath and filename - is this a file thats in the 'preserve' list?
 def CheckPreserve(Fname):
@@ -257,13 +288,15 @@ def GetHistoricMD5(FullFileName,FileDate,FileSize):
     
     
 def OutputHelp():
-    print('fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p <preservedir>] [-c <configfile>] [-w] [-o <outputfile>]')
+    print('fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p <preservedir>] [-c <configfile>] [-w] [-m] [-g] [-o <outputfile>]')
     print('')
     print('Where')
     print('  -i <InputDir>  (Mandatory) directory to scan for duplicates')
     print('  -p <PreserveDir> directory to NOT delete from')
     print('  -c <ConfigFile>  file holding run parameters')
     print('  -w               output file in WINDOWS Command prompt syntax (batch file)')
+    print('  -m               use low memory footprint checksum calculation - slower')
+    print('  -g               force to open as GUI')
     print('  -o <OutputFile>  put comments/deletions in specific file - default fdf_scanner_output.sh (or .bat)')
 
 
@@ -276,10 +309,12 @@ def ParseInputOpts(argv):
     global MD5KeptCount, MD5CalculatedCount, DuplicatesCount
     global IsWindows
     global OutputFileRemark, OutputFileRemove, OutputFileExtension
+    global ForceUseGUI, UseLowMemory
     
     try:
-        opts, args = getopt.getopt(argv[1:],"hi:o:p:d:c:w",["ifile=","ofile=","preservedir="])
+        opts, args = getopt.getopt(argv[1:],"hi:o:p:d:c:wmg",["ifile=","ofile=","preservedir="])
     except getopt.GetoptError:
+        print('no options given...')
         OutputHelp()
         sys.exit(2)
 
@@ -312,66 +347,74 @@ def ParseInputOpts(argv):
                 PreserveDir.append(arg)
         elif opt in ("-d", "--databasefile"):
             DatabaseFile = arg
+        elif opt in ("-m", "--lomem"):
+            print ("Force to use low memory")
+            UseLowMemory = 1
+        elif opt in ("-g", "--gui"):
+            print("Force to GUI")
+            ForceUseGUI = 1
 
-    if UseConfigFile==1:
-        #   Ok, we're using a config file to pick up parameters:
+    if ForceUseGUI==0 :
 
-        #   Create and open the config file
-        config = configparser.ConfigParser()
-        config.read(ConfigFileName)
+        if UseConfigFile==1:
+            #   Ok, we're using a config file to pick up parameters:
 
-        #   Loop through the input director(ies) and add then to the InputDirectory list.
-        try:
-            for x in config['InputDirectories']:
-                InputDirectory.append(config['InputDirectories'][x])
-        except:
-            pass
+            #   Create and open the config file
+            config = configparser.ConfigParser()
+            config.read(ConfigFileName)
 
-        #   Loop through the input director(ies) and add then to the InputDirectory list.
-        try:
-            for x in config['PreserveDirectories']:
-                PreserveDir.append(config['PreserveDirectories'][x])
-        except:
-            pass
+            #   Loop through the input director(ies) and add then to the InputDirectory list.
+            try:
+                for x in config['InputDirectories']:
+                    InputDirectory.append(config['InputDirectories'][x])
+            except:
+                pass
 
-        #   Loop through the input director(ies) and add then to the InputDirectory list.
-        try:
-            for x in config['OutputFile']:
-                OutputFile= (config['OutputFile'][x])
-        except:
-            pass
+            #   Loop through the input director(ies) and add then to the InputDirectory list.
+            try:
+                for x in config['PreserveDirectories']:
+                    PreserveDir.append(config['PreserveDirectories'][x])
+            except:
+                pass
 
-        #   Loop through the input director(ies) and add then to the InputDirectory list.
-        try:
-            for x in config['DatabaseFile']:
-                DatabaseFile=config['DatabaseFile'][x]
-        except:
-            pass
+            #   Loop through the input director(ies) and add then to the InputDirectory list.
+            try:
+                for x in config['OutputFile']:
+                    OutputFile= (config['OutputFile'][x])
+            except:
+                pass
 
-        #   Loop through the input director(ies) and add then to the InputDirectory list.
-        try:
-            for x in config['WindowsOutput']:
-                OutputFileRemark = "REM "
-                OutputFileRemove = "DEL "
-                OutputFileExtension = ".BAT"
-        except:
-            pass
+            #   Loop through the input director(ies) and add then to the InputDirectory list.
+            try:
+                for x in config['DatabaseFile']:
+                    DatabaseFile=config['DatabaseFile'][x]
+            except:
+                pass
 
-    #   Now that we have the file name, put the correct extension onto it.
-    OutputFile=OutputFile+OutputFileExtension
+            #   Loop through the input director(ies) and add then to the InputDirectory list.
+            try:
+                for x in config['WindowsOutput']:
+                    OutputFileRemark = "REM "
+                    OutputFileRemove = "DEL "
+                    OutputFileExtension = ".BAT"
+            except:
+                pass
+
+        #   Now that we have the file name, put the correct extension onto it.
+        OutputFile=OutputFile+OutputFileExtension
 
 
-    if len(InputDirectory)==0:
-        print('Error: at least ONE input directory is required')
-        OutputHelp()
-        sys.exit(-1)
+        if len(InputDirectory)==0:
+            print('Error: at least ONE input directory is required')
+            OutputHelp()
+            sys.exit(-1)
 
-    for Inputs in InputDirectory:
-        print('Input directory:'+Inputs)
-    print('Output file        '+OutputFile)
-    for Preserves in PreserveDir:
-        print('Preserve directory:'+Preserves)
-    print('Database file      '+DatabaseFile)
+        for Inputs in InputDirectory:
+            print('Input directory:'+Inputs)
+        print('Output file        '+OutputFile)
+        for Preserves in PreserveDir:
+            print('Preserve directory:'+Preserves)
+        print('Database file      '+DatabaseFile)
 
 
     
@@ -404,8 +447,15 @@ def ReadDatabaseFile(DBFile):
         # Now that we've read in - ensure the list is sorted...
         OLDFileDB.sort(key=lambda x: x[1])
 
-
-
+#   0.6     Rather than using normal SHA256, which reads the entire file into memory
+#           this procedure reads the file blocks and calculates the hashes from that
+#           thereby using less memory.
+def file_hash(filename):
+    h = hashlib.sha256()
+    with open(filename, 'rb', buffering=0) as f:
+        for b in iter(lambda : f.read(128*1024), b''):
+            h.update(b)
+    return h.hexdigest()
 
  
 def CalculateHashes():
@@ -421,10 +471,13 @@ def CalculateHashes():
 
     #    Sort the file information to make it easier to process.
     FileDB.sort(key=lambda x: x[3])
- 
+
+    #print("")
+    #print("Calculating hashes")
+
     for i in range(1,len(FileDB)-1):
 
-        ProgressBar('Matching files ' + str(i),TotalCount=(len(FileDB)-1),CurrentCount=i),
+        # ProgressBar('Matching files ' + str(i),TotalCount=(len(FileDB)-1),CurrentCount=i),
             
         if FileDB[i][3] == FileDB[i+1][3] or FileDB[i][3] == FileDB[i-1][3]:
             try:
@@ -435,26 +488,40 @@ def CalculateHashes():
                     #   Filename, date, size
                     MD5Val=GetHistoricMD5(FileDB[i][1], FileDB[i][2], FileDB[i][3])
 
-                if MD5Val is None:
-                    # FileDB[i][4] = hashlib.md5(open(FileDB[i][1], 'rb').read()).hexdigest()
-                    FileDB[i][4] = hashlib.sha256(open(FileDB[i][1], 'rb').read()).hexdigest()
-                    MD5CalculatedCount+=1
+                if len(FileDB[i][4]) > 0:
+                    # We've already worked out a hash
+                    MD5Val=FileDB[i][4]
+
+                if len(MD5Val)>0:
+                    #   Got an MD5 from historic data:
+                    FileDB[i][4] = MD5Val
+                    MD5KeptCount+=1
                 else:
-                    if len(MD5Val)>0:
-                        #   Got an MD5 from historic data:
-                        FileDB[i][4] = MD5Val
-                        MD5KeptCount+=1
-                    else:
-                        #   No historic match - re-calculate
-                        FileDB[i][4] = hashlib.sha256(open(FileDB[i][1], 'rb').read()).hexdigest()
+                    #   No historic match - re-calculate
+                    # print("Calculating hash:"+FileDB[i][1])
+
+                    #   If we're calculating a hash of a file > 100Mb it might take a few secs
+                    #   so update the progressbad
+                    if FileDB[i][3] > (1024 * 1024 * 1):
+                        FileCount=len(FileDB)
+                        Fname=FileDB[i][1].rsplit("\\",1)[1]
+                            #print(FileDB[i][1].rsplit("\\", 1)[0])
+                        ProgressBar('FileCount ' + str(FileCount)+ ' calculating hash:'+Fname,ForceOutput=1)
+                    try:
+                        #   Is the size too large to fit into memory? (250Mb)
+                        if FileDB[i][3] > (1024 * 1024 * 250):
+                            FileDB[i][4] = file_hash(FileDB[i][1])
+                        else:
+                            FileDB[i][4] = hashlib.sha256(open(FileDB[i][1], 'rb').read()).hexdigest()
                         MD5CalculatedCount+=1
+                    except:
+                        print('Error (sha256:nomatch):'+FileDB[i][1])  #+' '+sys.exc_info()[0]
+                        FileDB[i][4] = "OSERROR"
 
             except OSError:
                 FileDB[i][4] = "OSERROR"
 
-    print("")
 
-    
 
 def LocateDups():
 
@@ -481,9 +548,11 @@ def LocateDups():
             StartPtr = i
             EndPtr = i
 
-            while FileDB[EndPtr + 1][4] == This_MD5:
-                EndPtr += 1
-
+            try:
+                while FileDB[EndPtr + 1][4] == This_MD5 and EndPtr < len(FileDB)-2:
+                    EndPtr += 1
+            except:
+                print("Error located in locatedup")
             #   Start and End now mark the start and end of THIS md5.
 
             #   Count of preserved files.
@@ -613,7 +682,7 @@ class AboutDialog(QtWidgets.QDialog, Ui_AboutDialog):
     def __init__(self, desc=None, parent=None):
         super(AboutDialog, self).__init__(parent)
         self.setupUi(self)
-        self.VersionText.setText(" By Carl Beech - V"+VersionNumber+" 2017"+chr(13)+chr(10)+"http://github.com/carlbeech/fast-duplicate-finder/"+chr(13)+chr(10)+chr(13)+chr(10)+"Locate duplicate files and do it fast!")
+        self.VersionText.setText(" By Carl Beech - V"+VersionNumber+" 2020"+chr(13)+chr(10)+"http://github.com/carlbeech/fast-duplicate-finder/"+chr(13)+chr(10)+chr(13)+chr(10)+"Locate duplicate files and do it fast!")
         self.ProgramText.setText("fdf_scanner")
 
 
@@ -1110,9 +1179,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "Finished"
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "Stats:"
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Total files scanned:" + str(len(FileDB))
-                ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Potential duplicates (filesizes the same):" + str(MD5CalculatedCount + MD5KeptCount)
+                # ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Potential duplicates (filesizes the same):" + str(MD5CalculatedCount + MD5KeptCount)
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Calculated SHA256 for files:" + str(MD5CalculatedCount)
-                ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Count of SHA256 calculations saved due to database:" + str(MD5KeptCount)
+                # ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Count of SHA256 calculations saved due to database:" + str(MD5KeptCount)
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + ""
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + "  Total duplicates found:" + str(DuplicatesCount)
                 ProgressBar_TEXT = ProgressBar_TEXT + chr(13) + chr(10) + ""
@@ -1132,16 +1201,18 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 ProgramName=sys.argv[0]
 ProgramName=ProgramName.upper()
 
+#    Parse the arguments
+ParseInputOpts(sys.argv)
 
 #   Are we running in command line or GUI varsion?
 #
 #    if sys.argv[1]=='fdf_scanner'    ?
-if ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or ProgramName[-15:]=='FDF_SCANNER.EXE':
+if ForceUseGUI==0 and (ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or ProgramName[-15:]=='FDF_SCANNER.EXE'):
 
     #    Running from the command line with arguments...
 
-    print("Command line version (use fdf_scanner_ui for GUI)")
-    print("FDF_SCANNER By Carl Beech - V"+VersionNumber+" 2017")
+    print("Command line version (copy/rename fdf_scanner.py to fdf_scanner_gui.py or use -g param for GUI)")
+    print("FDF_SCANNER By Carl Beech - V"+VersionNumber+" 2020")
 
     StartTime=time.time()
 
@@ -1163,14 +1234,14 @@ if ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or Pr
         print("Unknown OS?")
     print("")
 
-    #    Parse the arguments
-    ParseInputOpts(sys.argv)
-
     #    Old database file to read in?
     if len(DatabaseFile) > 0:
         ReadDatabaseFile(DatabaseFile)
 
     #   Read input director(ies) into InputDirectory list, and scan all files in from each..
+    print(" ")
+    print("Reading input directorie(s)")
+    print("")
     for Inputs in InputDirectory:
         print('Input directory:'+Inputs)
         ScanDirectory(Inputs)
@@ -1185,6 +1256,7 @@ if ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or Pr
     LocateDups()
 
     #    Generate the output
+    DuplicatesCount=0
     GenerateOutput()
 
     #    If we've got a database file name, save it
@@ -1197,9 +1269,9 @@ if ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or Pr
     print("Finished")
     print("Stats:")
     print("  Total files scanned:"+str(len(FileDB)))
-    print("  Potential duplicates (filesizes the same):"+str(MD5CalculatedCount+MD5KeptCount))
+    # print("  Potential duplicates (filesizes the same):"+str(MD5CalculatedCount+MD5KeptCount))
     print("  Calculated SHA256 for files:"+str(MD5CalculatedCount))
-    print("  Count of SHA256 calculations saved due to database:"+str(MD5KeptCount))
+    # print("  Count of SHA256 calculations saved due to database:"+str(MD5KeptCount))
     print("")
     print("  Total duplicates found:"+str(DuplicatesCount))
     print("")
@@ -1208,7 +1280,7 @@ if ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or Pr
     print("Total secs:"+str(int(EndTime-StartTime)))
 
 #   If we're running in the GUI then set up and open the GUI...
-if ProgramName[-18:]=='FDF_SCANNER_GUI.PY' or ProgramName[-15:]=='FDF_SCANNER_GUI' or ProgramName[-19:]=='FDF_SCANNER_GUI.EXE':
+if ForceUseGUI==1 or (ProgramName[-18:]=='FDF_SCANNER_GUI.PY' or ProgramName[-15:]=='FDF_SCANNER_GUI' or ProgramName[-19:]=='FDF_SCANNER_GUI.EXE'):
 
     #    Running from the command line with arguments...
 

@@ -40,6 +40,14 @@ HISTORY
 - Bugfix (Many thanks for the fix from Oliver Kopp)
 - Add exception code to deal with invalid timestamps for files under windows
 
+### V0.6
+- add '-g' switch to force to GUI mode as alternative to renaming the file (renaming still works)
+- added low memory footprint hash calculate (files > 250Mb)
+- Duplicates are located as the directories are scanned, and output files and database file
+  is written for every 20 files examined.
+  (file writes are fast and so there's not a major issue with time, in comparison to the benefit
+  of being able to have output in case the program crashes part way through processing).
+
 A bit of history...
 ===================
 
@@ -66,6 +74,7 @@ Features of the commandline version:
 * You can save all the input parameters into a configuration file, so you don't have to keep typing them in ;-)
 * Pattern matching of files is performed by using SHA256, not MD5.
 * The program outputs a runnable script that contains the necessary file delete commands, so you can review/ammend before you run.
+* Output is generated while the filesystem is scanned so there is usable output even if you get a partial run.
 * Can output linux (bash) output, or windows (batch file) output
 * Automatically detects and adapts output for the OS
 * Both GUI and command line versions of the program.
@@ -196,7 +205,7 @@ USE
 ===
 
 ```terminal
-fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>] [-w]
+fdf_scanner.py -i <inputdir> [-i <inputdir>] [-p <preservedir>] [-p preservedir] [-d <databaseSavefile>] [-o <outputfile>] [-w] [-g]
 ```
 
 Happy De-duplicating!

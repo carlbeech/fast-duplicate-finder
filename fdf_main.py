@@ -120,6 +120,13 @@ class Ui_MainWindow(object):
         self.actionQuit.setObjectName("actionQuit")
         self.actionAbout = QtWidgets.QAction(MainWindow)
         self.actionAbout.setObjectName("actionAbout")
+        self.actionLoad_Configuration = QtWidgets.QAction(MainWindow)
+        self.actionLoad_Configuration.setObjectName("actionLoad_Configuration")
+        self.actionSave_Configuration = QtWidgets.QAction(MainWindow)
+        self.actionSave_Configuration.setObjectName("actionSave_Configuration")
+        self.menuFile.addSeparator()
+        self.menuFile.addAction(self.actionLoad_Configuration)
+        self.menuFile.addAction(self.actionSave_Configuration)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionQuit)
         self.menuHelp.addAction(self.actionAbout)
@@ -170,6 +177,8 @@ class Ui_MainWindow(object):
         self.actionEdit_Configuration_File.setText(_translate("MainWindow", "&Edit Configuration File"))
         self.actionQuit.setText(_translate("MainWindow", "&Quit"))
         self.actionAbout.setText(_translate("MainWindow", "About..."))
+        self.actionLoad_Configuration.setText(_translate("MainWindow", "Load Configuration"))
+        self.actionSave_Configuration.setText(_translate("MainWindow", "Save Configuration"))
 
 
 if __name__ == "__main__":
