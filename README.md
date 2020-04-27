@@ -53,6 +53,7 @@ HISTORY
 - progressbar now includes name of the file currently having hash calculation and its size
 - works in both GUI and console modes
 - output file is (re)generated for every 100 files having a hash calculation.
+- progressbar takes console size into account
 
 
 A bit of history...

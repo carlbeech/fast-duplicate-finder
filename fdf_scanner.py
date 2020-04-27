@@ -152,20 +152,36 @@ def ProgressBar( OutputText, TotalCount=0, CurrentCount=0, BarSize=40, TotalLine
 
     ProgressBar_PROGRESS_1=CurrentCount
 
+    try:
+        columns, rows = os.get_terminal_size(0)
+    except OSError:
+        try:
+            columns, rows = os.get_terminal_size(1)
+        except:
+            columns=80
+            rows=1
+
+    # print ("TotalLineLength:"+str(TotalLineLength)+" rows:"+str(columns))
+
+    if TotalLineLength > columns:
+        TotalLineLength_Used=columns
+    else:
+        TotalLineLength_Used=TotalLineLength
+
     if (time.time() - GlobalTimer) > 1 or ForceOutput==1 :
         #   its been more than 1 sec since last output, so update the screen
 
         if TotalCount>0:
             #   We've got values - do a progressbar
             formatted_name = '\r '+ ( "=" * int(BarSize*(CurrentCount/TotalCount)))+( " " * (BarSize-int(40*(CurrentCount/TotalCount))))+' '+OutputText+(" " * 80)
-            sys.stdout.write(formatted_name[0:TotalLineLength])
+            sys.stdout.write(formatted_name[0:TotalLineLength_Used])
             sys.stdout.flush()
             GlobalTimer = time.time()
 
         else:
             #   No values - simply output the text
             formatted_name = '\r ' + OutputText+(" " * 80)
-            sys.stdout.write(formatted_name[0:TotalLineLength])
+            sys.stdout.write(formatted_name[0:TotalLineLength_Used])
             sys.stdout.flush()
             GlobalTimer = time.time()
 
