@@ -48,6 +48,13 @@ HISTORY
   (file writes are fast and so there's not a major issue with time, in comparison to the benefit
   of being able to have output in case the program crashes part way through processing).
 
+### V0.7
+- Improvements - progress bar now works again properly
+- progressbar now includes name of the file currently having hash calculation and its size
+- works in both GUI and console modes
+- output file is (re)generated for every 100 files having a hash calculation.
+
+
 A bit of history...
 ===================
 
