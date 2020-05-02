@@ -55,6 +55,8 @@ HISTORY
 - output file is (re)generated for every 100 files having a hash calculation.
 - progressbar takes console size into account
 
+### V0.8
+- Bug fix - crash deriving file names within linux environments
 
 A bit of history...
 ===================
