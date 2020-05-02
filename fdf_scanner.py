@@ -25,7 +25,7 @@ from fdf_main import Ui_MainWindow
 from ProgressBar import ProgressDlg
 
 
-VersionNumber="0.7"
+VersionNumber="0.8"
 
 
 #   HISTORY
@@ -41,6 +41,7 @@ VersionNumber="0.7"
 #           As files are scanned, the output file is generated (including database file)
 #   0.7     Progress bar now works again, also, progress bar now shows name of file being hashed and its size
 #           Works the same in gui as console version.
+#   0.8     Bug fix - error on deriving file name in linux environments.
 
 
 
@@ -515,7 +516,10 @@ def CalculateHashes():
                     #   No historic match - re-calculate
                     # print("Calculating hash:"+FileDB[i][1])
 
-                    Fname = FileDB[i][1].rsplit("\\", 1)[1]
+                    if OS[0:5] == 'Linux':
+                        Fname = FileDB[i][1].rsplit("/", 1)[1]
+                    else:
+                        Fname = FileDB[i][1].rsplit("\\", 1)[1]
 
                     Fsize = format_bytes(FileDB[i][3])
 
