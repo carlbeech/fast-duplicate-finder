@@ -25,7 +25,7 @@ from fdf_main import Ui_MainWindow
 from ProgressBar import ProgressDlg
 
 
-VersionNumber="0.8"
+VersionNumber="0.9"
 
 
 #   HISTORY
@@ -42,7 +42,7 @@ VersionNumber="0.8"
 #   0.7     Progress bar now works again, also, progress bar now shows name of file being hashed and its size
 #           Works the same in gui as console version.
 #   0.8     Bug fix - error on deriving file name in linux environments.
-
+#   0.9     Bug fix - add clean string to stop crash due to some file names.
 
 
 #   ProcessBar dialog global communication variables...
@@ -93,6 +93,32 @@ def format_bytes(size):
         n += 1
     return str(int(size)) +' '+ power_labels[n]+'b'
 
+# Some characters cannot be displayed correctly - remove problem characters and replace with '?'
+def CleanString(InputString):
+
+    StrPtr=0
+    WorkingChar=""
+    OutputString=""
+
+    while StrPtr < (len(InputString)):
+
+        WorkingChar="?"
+        try:
+            WorkingChar=InputString[StrPtr:StrPtr+1]
+
+        except Exception as e:
+            print("DEBUG: Exception (bad character) " + str(e), 3)
+
+            WorkingChar="?"
+
+        try:
+            OutputString = OutputString + WorkingChar
+        except Exception as e:
+            print("DEBUG: Exception adding to string:" + str(e), 3)
+
+        StrPtr=StrPtr+1
+
+    return OutputString
 
 
 def BinaryChopSearch( SearchString ):
@@ -228,16 +254,25 @@ def ScanDirectory(walk_dir):
 
                 #   And save the data into the array...
                 #   If we're doing windows, switch everything to upper case, as windows isn't case sensitive
-                if IsWindows==1:
-                    Filepath=file_path.upper()
-                    try:
-                        timestamp = time.ctime(mtime)
-                    except:
-                        print("Timestamp is invalid for file {}".format(Filepath))
-                        timestamp = 0
-                    FileDB.append([filename.upper(), Filepath.replace('/','\\'), timestamp, size, '', 'N'])
+
+                #   Check: does the filename have a weird character that will cause issues later?
+                TempFileName=CleanString(filename)
+
+                if TempFileName == filename:
+
+                    if IsWindows==1:
+                        Filepath=file_path.upper()
+                        try:
+                            timestamp = time.ctime(mtime)
+                        except:
+                            print("Timestamp is invalid for file {}".format(Filepath))
+                            timestamp = 0
+                        FileDB.append([filename.upper(), Filepath.replace('/','\\'), timestamp, size, '', 'N'])
+                    else:
+                        FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
+
                 else:
-                    FileDB.append([filename, file_path, time.ctime(mtime), size, '', 'N'])
+                    print("Filename "+TempFileName+" ignored as it has bad character(s)")
 
 #   Given a full filepath and filename - is this a file thats in the 'preserve' list?
 def CheckPreserve(Fname):
@@ -490,6 +525,9 @@ def CalculateHashes():
     # Preserve the value of ProgressBar_TEXT so we can restore when finished
     Saved_ProgressBar_TEXT=ProgressBar_TEXT
 
+    OS = platform.platform()
+
+    FileDeltaCounter=100
 
     for i in range(1,len(FileDB)-1):
 
@@ -539,8 +577,12 @@ def CalculateHashes():
                     # 0.7 - if we've processed more than 'x' save values.
                     FileDelta = FileDelta + 1
 
-                    if FileDelta > 100:
+                    if FileDelta > FileDeltaCounter:
                         FileDelta = 0
+                        # Each time we'll up the filedelta before we save...
+                        # 'early' files will be the largest, therefore the longest to re-process if something breaks
+                        # as files go on, they'll get smaller - so we'll accomodate more...
+                        FileDeltaCounter=FileDeltaCounter+10
 
                         ProgressBar_TEXT = Saved_ProgressBar_TEXT + chr(13) + chr(10) + "    Examining files..." + chr(13) + chr(10) + '           saving...'
                         ProgressBar('Matching files ' + str(i) + ' saving... ',
@@ -698,24 +740,27 @@ def SaveDatabase():
     for i in range(1, len(FileDB) - 1):
 
         #   Only back up if we've got file > 250 bytes, and we've got a hash to save
-        if FileDB[i][3] > 250 and len(FileDB[i][4])>0:
 
-            #   0) Filename
-            #   1) File path + file name
-            #   2) Modification time
-            #   3) size
-            #   4) MD5
+        try:
+            if FileDB[i][3] > 250 and len(FileDB[i][4])>0:
 
-            doc = etree.SubElement(root, "file")
+                #   0) Filename
+                #   1) File path + file name
+                #   2) Modification time
+                #   3) size
+                #   4) MD5
 
-            # doc = ET.SubElement(root, "file")
+                doc = etree.SubElement(root, "file")
 
-            etree.SubElement(doc, "filename").text = FileDB[i][0]
-            etree.SubElement(doc, "fullfilename").text = FileDB[i][1]
-            etree.SubElement(doc, "modtime").text = FileDB[i][2]
-            etree.SubElement(doc, "size").text = str(FileDB[i][3])
-            etree.SubElement(doc, "MD5").text = FileDB[i][4]
+                # doc = ET.SubElement(root, "file")
 
+                etree.SubElement(doc, "filename").text = FileDB[i][0]
+                etree.SubElement(doc, "fullfilename").text = FileDB[i][1]
+                etree.SubElement(doc, "modtime").text = FileDB[i][2]
+                etree.SubElement(doc, "size").text = str(FileDB[i][3])
+                etree.SubElement(doc, "MD5").text = FileDB[i][4]
+        except Exception as e:
+            print ("Exception during backup - record not output" + str(e), 3)
 
     tree = etree.ElementTree(root)
     tree.write(DatabaseFile,pretty_print=True)
