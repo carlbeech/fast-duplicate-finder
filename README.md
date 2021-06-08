@@ -57,6 +57,7 @@ HISTORY
 
 ### V0.8
 - Bug fix - crash deriving file names within linux environments
+- Bug fix - if you rename the program to 'fdf_scanner_gui' it auto-starts in GUI mode - was broken now fixed
 
 A bit of history...
 ===================
