@@ -349,6 +349,7 @@ def ParseInputOpts(argv):
     global IsWindows
     global OutputFileRemark, OutputFileRemove, OutputFileExtension
     global ForceUseGUI, UseLowMemory
+    global ProgramName
     
     try:
         opts, args = getopt.getopt(argv[1:],"hi:o:p:d:c:wmg",["ifile=","ofile=","preservedir="])
@@ -392,6 +393,12 @@ def ParseInputOpts(argv):
         elif opt in ("-g", "--gui"):
             print("Force to GUI")
             ForceUseGUI = 1
+
+    if ProgramName[-18:]=='FDF_SCANNER_GUI.PY' or ProgramName[-15:]=='FDF_SCANNER_GUI' or ProgramName[-19:]=='FDF_SCANNER_GUI.EXE':
+
+        # Bugfix: if the name is '...GUI' auto switch to GUI mode.
+        ForceUseGUI = 1
+
 
     if ForceUseGUI==0 :
 
@@ -1293,13 +1300,16 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 ProgramName=sys.argv[0]
 ProgramName=ProgramName.upper()
 
+print("Program "+ProgramName)
+
 #    Parse the arguments
 ParseInputOpts(sys.argv)
+
 
 #   Are we running in command line or GUI varsion?
 #
 #    if sys.argv[1]=='fdf_scanner'    ?
-if ForceUseGUI==0 and (ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=='FDF_SCANNER' or ProgramName[-15:]=='FDF_SCANNER.EXE'):
+if ForceUseGUI==0:
 
     #    Running from the command line with arguments...
 
@@ -1372,7 +1382,7 @@ if ForceUseGUI==0 and (ProgramName[-14:]=='FDF_SCANNER.PY' or ProgramName[-11:]=
     print("Total secs:"+str(int(EndTime-StartTime)))
 
 #   If we're running in the GUI then set up and open the GUI...
-if ForceUseGUI==1 or (ProgramName[-18:]=='FDF_SCANNER_GUI.PY' or ProgramName[-15:]=='FDF_SCANNER_GUI' or ProgramName[-19:]=='FDF_SCANNER_GUI.EXE'):
+if ForceUseGUI==1:
 
     #    Running from the command line with arguments...
 
